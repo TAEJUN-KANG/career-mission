@@ -1,0 +1,6 @@
+{
+  "name": "Career Mission – AI 취업 준비 미션 관리 플랫폼",
+  "description": "당신의 취업 준비를 하나의 성장 게임으로. AI 역량 분석, 맞춤형 데일리 미션, 게이미피케이션 XP/레벨 시스템, 스킬 트리 및 포트폴리오 관리 플랫폼",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
