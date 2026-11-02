@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Mission, MissionCategory, MissionDifficulty, UserProfile } from '../types';
 import { DIFFICULTY_XP } from '../utils/storage';
+import { postApiJson } from '../utils/apiClient';
 import { X, Sparkles, Plus, Loader2, Target, Calendar } from 'lucide-react';
 
 interface CreateMissionModalProps {
@@ -55,51 +56,83 @@ export const CreateMissionModal: React.FC<CreateMissionModalProps> = ({
 
   if (!isOpen) return null;
 
+  const normalizeDifficulty = (d: any): MissionDifficulty => {
+    if (!d) return 'NORMAL';
+    const s = String(d).toUpperCase().trim();
+    if (s === 'EASY' || s === '초급' || s === '쉬움' || s === 'BASIC') return 'EASY';
+    if (s === 'NORMAL' || s === '중급' || s === '보통' || s === 'MEDIUM') return 'NORMAL';
+    if (s === 'HARD' || s === '고급' || s === '어려움' || s === 'ADVANCED') return 'HARD';
+    if (s === 'EPIC' || s === '최고급' || s === '전문가' || s === 'EXPERT') return 'EPIC';
+    return 'NORMAL';
+  };
+
+  const normalizeCategory = (c: any): MissionCategory => {
+    if (!c) return '기술 습득';
+    const s = String(c).trim();
+    if (s.includes('전공')) return '전공 공부';
+    if (s.includes('기술') || s.includes('도구') || s.includes('툴') || s.includes('SW')) return '기술 습득';
+    if (s.includes('자격') || s.includes('기사')) return '자격증';
+    if (s.includes('어학') || s.includes('영어') || s.includes('스피킹')) return '어학';
+    if (s.includes('프로젝트') || s.includes('캡스톤')) return '프로젝트';
+    if (s.includes('기업') || s.includes('산업') || s.includes('회사') || s.includes('분석')) return '기업 분석';
+    if (s.includes('포트폴리오')) return '포트폴리오';
+    if (s.includes('취업') || s.includes('면접') || s.includes('자소서')) return '취업 준비';
+    return '기술 습득';
+  };
+
   const handleAiGenerate = async () => {
     setIsGenerating(true);
     setAiError('');
     try {
-      const res = await fetch('/api/ai/generate-missions', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
+      const data = await postApiJson<any[]>(
+        '/api/ai/generate-missions',
+        {
           profile,
           count: aiCount,
           focusCategory: aiFocusCategory || undefined,
-        }),
-      });
+        }
+      );
 
-      const data = await res.json();
       if (data.success && Array.isArray(data.data) && data.data.length > 0) {
-        const newMissions: Mission[] = data.data.map((item: any, idx: number) => ({
-          id: `ai-m-${Date.now()}-${idx}`,
-          title: item.title,
-          description: item.description,
-          category: (item.category as MissionCategory) || '기술 습득',
-          difficulty: (item.difficulty as MissionDifficulty) || 'NORMAL',
-          xp: DIFFICULTY_XP[(item.difficulty as MissionDifficulty) || 'NORMAL'],
-          estimatedHours: item.estimatedHours || 3,
-          deadline: new Date(Date.now() + (idx + 3) * 24 * 60 * 60 * 1000)
-            .toISOString()
-            .split('T')[0],
-          status: 'TODO',
-          steps: item.steps || ['실행 계획 수립', '결과물 작성 및 실습', '최종 검토'],
-          completionCondition:
-            item.completionCondition || '실행 결과물 파일 또는 요약 보고서 등록',
-          recommendedResources: item.recommendedResources || [],
-          isDailyMission: idx === 0,
-          linkedSkill: item.linkedSkill,
-          createdAt: new Date().toISOString().split('T')[0],
-        }));
+        const newMissions: Mission[] = data.data.map((item: any, idx: number) => {
+          const diff = normalizeDifficulty(item.difficulty);
+          const cat = normalizeCategory(item.category);
+          const xpVal = Number(item.xp) || DIFFICULTY_XP[diff] || 200;
+
+          return {
+            id: `ai-m-${Date.now()}-${idx}`,
+            title: item.title || `${profile.targetCompany} 맞춤 역량 실습 과제`,
+            description: item.description || '목표 직무 역량을 높이기 위한 실천 미션입니다.',
+            category: cat,
+            difficulty: diff,
+            xp: xpVal,
+            estimatedHours: Number(item.estimatedHours) || 3,
+            deadline: new Date(Date.now() + (idx + 3) * 24 * 60 * 60 * 1000)
+              .toISOString()
+              .split('T')[0],
+            status: 'TODO',
+            steps: Array.isArray(item.steps) && item.steps.length > 0
+              ? item.steps
+              : ['실행 계획 수립', '결과물 작성 및 실습', '최종 검토'],
+            completionCondition:
+              item.completionCondition || '실행 결과물 파일 또는 요약 보고서 등록',
+            recommendedResources: Array.isArray(item.recommendedResources)
+              ? item.recommendedResources
+              : [],
+            isDailyMission: idx === 0,
+            linkedSkill: item.linkedSkill || cat,
+            createdAt: new Date().toISOString().split('T')[0],
+          };
+        });
 
         onAddGeneratedMissions(newMissions);
         onClose();
       } else {
-        setAiError('미션 생성에 실패했습니다. 다시 시도해주세요.');
+        setAiError(data.error || data.errorNotice || '미션 생성에 실패했습니다. 다시 시도해주세요.');
       }
     } catch (err: any) {
       console.error(err);
-      setAiError('네트워크 오류가 발생했습니다.');
+      setAiError(err?.message || '네트워크 오류가 발생했습니다.');
     } finally {
       setIsGenerating(false);
     }

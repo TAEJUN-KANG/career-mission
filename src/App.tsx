@@ -29,6 +29,7 @@ import {
   DEFAULT_COACH_MESSAGES,
   DEFAULT_ANALYSIS,
 } from './utils/storage';
+import { postApiJson } from './utils/apiClient';
 
 import { Sidebar } from './components/Sidebar';
 import { Header } from './components/Header';
@@ -233,35 +234,33 @@ export default function App() {
 
     try {
       const active = missions.filter((m) => m.status !== 'COMPLETED');
-      const res = await fetch('/api/ai/coach-chat', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
+      const data = await postApiJson<{ reply: string }>(
+        '/api/ai/coach-chat',
+        {
           messages: newMessages,
           userMessage: userText,
           profile,
           activeMissions: active,
           level: stats.level,
           xp: stats.xp,
-        }),
-      });
+        }
+      );
 
-      const data = await res.json();
       const aiMsg: CoachMessage = {
         id: `msg-${Date.now() + 1}`,
         sender: 'ai',
-        text: data.reply || '답변을 불러오지 못했습니다.',
+        text: data.reply || data.error || data.errorNotice || '답변을 불러오지 못했습니다.',
         timestamp: new Date().toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' }),
         suggestedAction: '오늘의 미션을 수행하고 경험치를 올려보세요.',
       };
 
       setCoachMessages([...newMessages, aiMsg]);
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
       const errorMsg: CoachMessage = {
         id: `msg-${Date.now() + 1}`,
         sender: 'ai',
-        text: '네트워크 연결 상태를 확인해주세요. 잠시 후 다시 시도해주세요.',
+        text: err?.message || '네트워크 연결 상태를 확인해주세요. 잠시 후 다시 시도해주세요.',
         timestamp: new Date().toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' }),
       };
       setCoachMessages([...newMessages, errorMsg]);
@@ -271,21 +270,21 @@ export default function App() {
   // Refresh Competence Analysis with Gemini
   const handleRefreshAnalysis = async () => {
     try {
-      const res = await fetch('/api/ai/competence-analysis', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ profile }),
-      });
+      const data = await postApiJson<CompetenceAnalysis>(
+        '/api/ai/competence-analysis',
+        { profile }
+      );
 
-      const data = await res.json();
       if (data.success && data.data) {
         setAnalysis({
           ...data.data,
           lastUpdated: new Date().toISOString(),
         });
+      } else if (data.error || data.errorNotice) {
+        console.warn('Analysis notice:', data.error || data.errorNotice);
       }
-    } catch (err) {
-      console.error('Failed to refresh analysis:', err);
+    } catch (err: any) {
+      console.error('Failed to refresh analysis:', err?.message || err);
     }
   };
 
