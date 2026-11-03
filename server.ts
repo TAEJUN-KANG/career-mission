@@ -14,7 +14,15 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const app = express();
-const PORT = Number(process.env.PORT) || 3000;
+
+// Dev server must always run on port 3000 in AI Studio
+const portArgIndex = process.argv.indexOf('--port');
+const portArg = portArgIndex !== -1 ? Number(process.argv[portArgIndex + 1]) : NaN;
+const PORT = !isNaN(portArg) ? portArg : 3000;
+
+const hostArgIndex = process.argv.indexOf('--host');
+const hostArg = hostArgIndex !== -1 ? process.argv[hostArgIndex + 1] : '0.0.0.0';
+const HOST = hostArg || '0.0.0.0';
 
 app.use(express.json({ limit: '10mb' }));
 
@@ -39,7 +47,11 @@ async function startServer() {
     const vite = await (
       await import('vite')
     ).createServer({
-      server: { middlewareMode: true },
+      server: {
+        middlewareMode: true,
+        hmr: process.env.DISABLE_HMR !== 'true',
+        watch: process.env.DISABLE_HMR === 'true' ? null : {},
+      },
       appType: 'spa',
     });
     app.use(vite.middlewares);
@@ -50,8 +62,8 @@ async function startServer() {
     });
   }
 
-  app.listen(PORT, '0.0.0.0', () => {
-    console.log(`Career Mission Server running on port ${PORT}`);
+  app.listen(PORT, HOST, () => {
+    console.log(`Career Mission Server successfully listening on http://${HOST}:${PORT}`);
   });
 }
 
